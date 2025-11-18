@@ -1,71 +1,98 @@
+import React, { useEffect, useState } from 'react'
+import Hero from './components/Hero'
+import ProductGrid from './components/ProductGrid'
+import Cart from './components/Cart'
+
+const API_BASE = import.meta.env.VITE_BACKEND_URL || ''
+
 function App() {
+  const [products, setProducts] = useState([])
+  const [cart, setCart] = useState([])
+  const [loading, setLoading] = useState(true)
+  const [message, setMessage] = useState('')
+
+  useEffect(() => {
+    async function load() {
+      try {
+        const res = await fetch(`${API_BASE}/api/products`)
+        const data = await res.json()
+        setProducts(data)
+      } catch (e) {
+        console.error(e)
+      } finally {
+        setLoading(false)
+      }
+    }
+    load()
+  }, [])
+
+  function addToCart(product) {
+    setCart((prev) => {
+      const existing = prev.find((i) => (i.id || i.title) === (product.id || product.title))
+      if (existing) {
+        return prev.map((i) =>
+          (i.id || i.title) === (product.id || product.title) ? { ...i, quantity: i.quantity + 1 } : i
+        )
+      }
+      return [...prev, { ...product, quantity: 1 }]
+    })
+  }
+
+  function removeFromCart(item) {
+    setCart((prev) => prev.filter((i) => (i.id || i.title) !== (item.id || item.title)))
+  }
+
+  async function checkout() {
+    if (cart.length === 0) return
+    try {
+      const res = await fetch(`${API_BASE}/api/orders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          customer_name: 'Guest',
+          customer_email: 'guest@example.com',
+          address: '123 Demo Street',
+          items: cart.map((c) => ({ product_id: String(c.id || ''), title: c.title, price: c.price, quantity: c.quantity })),
+          total: cart.reduce((s, i) => s + i.price * i.quantity, 0)
+        })
+      })
+      const data = await res.json()
+      if (!res.ok) throw new Error(data.detail || 'Checkout failed')
+      setMessage(`Order placed! ID: ${data.order_id}`)
+      setCart([])
+    } catch (e) {
+      setMessage(String(e.message || e))
+    } finally {
+      setTimeout(() => setMessage(''), 4000)
+    }
+  }
+
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900">
-      {/* Subtle pattern overlay */}
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_50%_50%,rgba(59,130,246,0.05),transparent_50%)]"></div>
+      <Hero />
 
-      <div className="relative min-h-screen flex items-center justify-center p-8">
-        <div className="max-w-2xl w-full">
-          {/* Header with Flames icon */}
-          <div className="text-center mb-12">
-            <div className="inline-flex items-center justify-center mb-6">
-              <img
-                src="/flame-icon.svg"
-                alt="Flames"
-                className="w-24 h-24 drop-shadow-[0_0_25px_rgba(59,130,246,0.5)]"
-              />
-            </div>
-
-            <h1 className="text-5xl font-bold text-white mb-4 tracking-tight">
-              Flames Blue
-            </h1>
-
-            <p className="text-xl text-blue-200 mb-6">
-              Build applications through conversation
-            </p>
-          </div>
-
-          {/* Instructions */}
-          <div className="bg-slate-800/50 backdrop-blur-sm border border-blue-500/20 rounded-2xl p-8 shadow-xl mb-6">
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                1
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Describe your idea</h3>
-                <p className="text-blue-200/80 text-sm">Use the chat panel on the left to tell the AI what you want to build</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4 mb-6">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                2
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Watch it build</h3>
-                <p className="text-blue-200/80 text-sm">Your app will appear in this preview as the AI generates the code</p>
-              </div>
-            </div>
-
-            <div className="flex items-start gap-4">
-              <div className="flex-shrink-0 w-8 h-8 bg-blue-500 text-white rounded-lg flex items-center justify-center font-bold">
-                3
-              </div>
-              <div>
-                <h3 className="font-semibold text-white mb-1">Refine and iterate</h3>
-                <p className="text-blue-200/80 text-sm">Continue the conversation to add features and make changes</p>
-              </div>
-            </div>
-          </div>
-
-          {/* Footer */}
-          <div className="text-center">
-            <p className="text-sm text-blue-300/60">
-              No coding required • Just describe what you want
-            </p>
-          </div>
+      <div className="max-w-7xl mx-auto px-6 grid md:grid-cols-4 gap-6">
+        <div className="md:col-span-3">
+          {loading ? (
+            <div className="text-blue-200">Loading products...</div>
+          ) : (
+            <ProductGrid products={products} onAdd={addToCart} />
+          )}
+        </div>
+        <div className="md:col-span-1">
+          <Cart items={cart} onRemove={removeFromCart} onCheckout={checkout} />
         </div>
       </div>
+
+      {message && (
+        <div className="fixed bottom-6 left-1/2 -translate-x-1/2 bg-white/10 backdrop-blur border border-white/20 text-white px-4 py-2 rounded-lg">
+          {message}
+        </div>
+      )}
+
+      <footer className="mt-20 py-10 text-center text-blue-200/70">
+        Built with HTML, CSS and JavaScript.
+      </footer>
     </div>
   )
 }
